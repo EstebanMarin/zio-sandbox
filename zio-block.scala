@@ -34,17 +34,20 @@ def fetchLinks(title: String): Seq[String] = {
     .collect { case s"/wiki/$rest" => rest }
 }
 
-def scrapper(startArticle: String, depth: Int) = {
-  var seen = Set(startArticle)
-  var current = Set(startArticle)
-  for (i <- Range(0, depth)) {
-    current = current.flatMap(fetchLinks(_)).filter(!seen.contains(_))
-    seen = seen ++ current
-  }
-  seen
-  println(seen)
+def scrapper(startArticle: String, depth: Int): Set[String] = {
+  (0 until depth)
+    .foldLeft(Set(startArticle), Set(startArticle)) {
+      case ((seen, current), _) =>
+        val next = current.flatMap(fetchLinks) diff seen
+        (seen ++ next, next)
+    }
+    ._1
 }
 
+@main def main(startArticle: String, depth: Int) =
+  val answers =  scrapper(startArticle, depth)
+  println(s"$answers")
 
-@main def main = ???
+
+
 // scala-cli run zio-block.scala -- colombia 1
