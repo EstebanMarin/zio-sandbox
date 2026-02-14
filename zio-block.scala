@@ -22,7 +22,7 @@ object Person:
 
 val jsonCodec = Schema[Person].derive(JsonFormat)
 
-def fetchLinks(title: String): Seq[String] = {
+def fetchLinks(title: String): Seq[WikiResult] = {
   Jsoup
     .connect(s"https://en.wikipedia.org/wiki/$title")
     .header("User-Agent", "My Scraper")
@@ -30,24 +30,38 @@ def fetchLinks(title: String): Seq[String] = {
     .select("main p a")
     .asScala
     .toSeq
-    .map(_.attr("href"))
-    .collect { case s"/wiki/$rest" => rest }
+    .map(a => (a.attr("href"), a.attr("href")))
+    .collect { case (s"/wiki/$rest", url) => WikiResult(rest, s"https://en.wikipedia.org$url") }
 }
 
-def scrapper(startArticle: String, depth: Int): Set[String] = {
+def scrapper(startArticle: String, depth: Int): Set[WikiResult] = {
+  val start = WikiResult(startArticle, s"https://en.wikipedia.org/wiki/$startArticle")
   (0 until depth)
-    .foldLeft(Set(startArticle), Set(startArticle)) {
+    .foldLeft((Set(start), Set(start))) {
       case ((seen, current), _) =>
-        val next = current.flatMap(fetchLinks) diff seen
+        val next = current.flatMap(r => fetchLinks(r.title)) diff seen
         (seen ++ next, next)
     }
     ._1
 }
 
-@main def main(startArticle: String, depth: Int) =
-  val answers =  scrapper(startArticle, depth)
-  println(s"$answers")
+case class WikiResult(title: String, url: String)
 
+object WikiResult:
+   given Schema[WikiResult] = Schema.derived
+
+val wikiCodec = Schema[WikiResult].derive(JsonFormat)
+
+@main def main(startArticle: String, depth: Int) =
+  val answers = scrapper(startArticle, depth)
+   answers.foreach { result =>
+     val encoded: Array[Byte] = wikiCodec.encode(result)
+     println(wikiCodec.encode(result))
+     val decoded: Either[SchemaError, WikiResult] = wikiCodec.decode(encoded)
+
+     println(wikiCodec.decode(encoded))
+
+  }
 
 
 // scala-cli run zio-block.scala -- colombia 1
