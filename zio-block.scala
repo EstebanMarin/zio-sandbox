@@ -11,6 +11,10 @@
 
 import zio.blocks.schema.*
 import zio.blocks.schema.json.JsonFormat
+import zio.blocks.schema.avro.AvroFormat
+import zio.blocks.schema.toon.ToonFormat
+import zio.blocks.schema.msgpack.MessagePackFormat
+import zio.blocks.schema.thrift.ThriftFormat
 
 import scala.jdk.CollectionConverters.*
 import org.jsoup.Jsoup
@@ -31,16 +35,18 @@ def fetchLinks(title: String): Seq[WikiResult] = {
     .asScala
     .toSeq
     .map(a => (a.attr("href"), a.attr("href")))
-    .collect { case (s"/wiki/$rest", url) => WikiResult(rest, s"https://en.wikipedia.org$url") }
+    .collect { case (s"/wiki/$rest", url) =>
+      WikiResult(rest, s"https://en.wikipedia.org$url")
+    }
 }
 
 def scrapper(startArticle: String, depth: Int): Set[WikiResult] = {
-  val start = WikiResult(startArticle, s"https://en.wikipedia.org/wiki/$startArticle")
+  val start =
+    WikiResult(startArticle, s"https://en.wikipedia.org/wiki/$startArticle")
   (0 until depth)
-    .foldLeft((Set(start), Set(start))) {
-      case ((seen, current), _) =>
-        val next = current.flatMap(r => fetchLinks(r.title)) diff seen
-        (seen ++ next, next)
+    .foldLeft((Set(start), Set(start))) { case ((seen, current), _) =>
+      val next = current.flatMap(r => fetchLinks(r.title)) diff seen
+      (seen ++ next, next)
     }
     ._1
 }
@@ -48,20 +54,26 @@ def scrapper(startArticle: String, depth: Int): Set[WikiResult] = {
 case class WikiResult(title: String, url: String)
 
 object WikiResult:
-   given Schema[WikiResult] = Schema.derived
+  given Schema[WikiResult] = Schema.derived
 
-val wikiCodec = Schema[WikiResult].derive(JsonFormat)
+val wikiJsonCodec = Schema[WikiResult].derive(JsonFormat)
+val wikiAvroCodec = Schema[Person].derive(AvroFormat) // Avro
+val wikiToonCodec = Schema[Person].derive(ToonFormat) // TOON (LLM-optimized)
+val wikiMsgpackCodec = Schema[Person].derive(MessagePackFormat) // MessagePack
+val wikiThriftCodec = Schema[Person].derive(ThriftFormat) // Thrift
 
 @main def main(startArticle: String, depth: Int) =
-  val answers = scrapper(startArticle, depth)
-   answers.foreach { result =>
-     val encoded: Array[Byte] = wikiCodec.encode(result)
-     println(wikiCodec.encode(result))
-     val decoded: Either[SchemaError, WikiResult] = wikiCodec.decode(encoded)
+  val answers: Set[WikiResult] = scrapper(startArticle, depth)
+  answers.foreach { result =>
+    val encoded: Array[Byte] = wikiJsonCodec.encode(result)
+    val jsonString: String = new String(encoded)
+    println(jsonString)
 
-     println(wikiCodec.decode(encoded))
-
+    val decoded: Either[SchemaError, WikiResult] = wikiJsonCodec.decode(encoded)
+    decoded match {
+      case Right(wiki) => println(s"Decoded: ${wiki.title}")
+      case Left(error) => println(s"Error: $error")
+    }
   }
-
 
 // scala-cli run zio-block.scala -- colombia 1
