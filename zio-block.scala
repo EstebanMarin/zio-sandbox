@@ -57,23 +57,41 @@ object WikiResult:
   given Schema[WikiResult] = Schema.derived
 
 val wikiJsonCodec = Schema[WikiResult].derive(JsonFormat)
-val wikiAvroCodec = Schema[Person].derive(AvroFormat) // Avro
-val wikiToonCodec = Schema[Person].derive(ToonFormat) // TOON (LLM-optimized)
-val wikiMsgpackCodec = Schema[Person].derive(MessagePackFormat) // MessagePack
-val wikiThriftCodec = Schema[Person].derive(ThriftFormat) // Thrift
+val wikiAvroCodec = Schema[WikiResult].derive(AvroFormat)
+val wikiToonCodec = Schema[WikiResult].derive(ToonFormat)
+val wikiMsgpackCodec = Schema[WikiResult].derive(MessagePackFormat)
+val wikiThriftCodec = Schema[WikiResult].derive(ThriftFormat)
 
 @main def main(startArticle: String, depth: Int) =
-  val answers: Set[WikiResult] = scrapper(startArticle, depth)
-  answers.foreach { result =>
-    val encoded: Array[Byte] = wikiJsonCodec.encode(result)
-    val jsonString: String = new String(encoded)
-    println(jsonString)
+  val answers = scrapper(startArticle, depth).toList
+  
+  val jsonList = Schema[List[WikiResult]].derive(JsonFormat)
+  val avroList = Schema[List[WikiResult]].derive(AvroFormat)
+  val toonList = Schema[List[WikiResult]].derive(ToonFormat)
+  val msgpackList = Schema[List[WikiResult]].derive(MessagePackFormat)
+  val thriftList = Schema[List[WikiResult]].derive(ThriftFormat)
 
-    val decoded: Either[SchemaError, WikiResult] = wikiJsonCodec.decode(encoded)
-    decoded match {
-      case Right(wiki) => println(s"Decoded: ${wiki.title}")
-      case Left(error) => println(s"Error: $error")
-    }
-  }
+  java.nio.file.Files.writeString(
+    java.nio.file.Paths.get("json.txt"),
+    new String(jsonList.encode(answers))
+  )
+  java.nio.file.Files.writeString(
+    java.nio.file.Paths.get("avro.txt"),
+    new String(avroList.encode(answers))
+  )
+  java.nio.file.Files.writeString(
+    java.nio.file.Paths.get("toon.txt"),
+    new String(toonList.encode(answers))
+  )
+  java.nio.file.Files.writeString(
+    java.nio.file.Paths.get("msgpack.txt"),
+    new String(msgpackList.encode(answers))
+  )
+  java.nio.file.Files.writeString(
+    java.nio.file.Paths.get("thrift.txt"),
+    new String(thriftList.encode(answers))
+  )
+
+  println(s"Saved ${answers.size} results in 5 formats")
 
 // scala-cli run zio-block.scala -- colombia 1
