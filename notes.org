@@ -1,0 +1,8 @@
+* Things to work on
+- [ ] show typeclass
+- [ ] Schema[List[WikiResult]]
+- [ ] refined types
+** Refined types
+- create an experiment to make work Iron scala dependency and make something simple
+- create a refined into zio-blocks
+- copy pasta macros from Iron in to zio-blocks 

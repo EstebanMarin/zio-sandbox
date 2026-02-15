@@ -1,3 +1,5 @@
+//> using repository "ivy:file:///Users/esteban-ziverge/.ivy2/local/[organisation]/[module]/[revision]/[type]s/[artifact](-[classifier]).[ext]"
+
 //> using dep "dev.zio::zio-blocks-schema:0.017"
 //> using dep "dev.zio::zio-blocks-schema-avro:0.017"
 //> using dep "dev.zio::zio-blocks-schema-toon:0.017"
@@ -6,6 +8,9 @@
 //> using dep "dev.zio::zio-blocks-schema-bson:0.017"
 
 //> using dep "org.jsoup:jsoup:1.22.1"
+
+//> using dep "io.github.iltotore::iron::3.2.3"
+
 
 // https://mill-build.org/mill/scalalib/script.html#_script_use_cases
 
@@ -18,6 +23,12 @@ import zio.blocks.schema.thrift.ThriftFormat
 
 import scala.jdk.CollectionConverters.*
 import org.jsoup.Jsoup
+
+import io.github.iltotore.iron.*
+import io.github.iltotore.iron.constraint.numeric.*
+
+def log(x: Double :| Positive): Double =
+  Math.log(x)
 
 case class Person(name: String, age: Int)
 
@@ -93,5 +104,5 @@ val wikiThriftCodec = Schema[WikiResult].derive(ThriftFormat)
   )
 
   println(s"Saved ${answers.size} results in 5 formats")
-
+  log(-1)
 // scala-cli run zio-block.scala -- colombia 1
