@@ -1,11 +1,10 @@
-package com.example
-
 import zio.blocks.schema.*
 import zio.blocks.schema.json.JsonFormat
 
-
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.*
+
+import SchemaIron.given
 
 case class Person(name: String, age: Int :| Positive)
 
@@ -17,6 +16,7 @@ val jsonCodec = Schema[Person].derive(JsonFormat)
 
 @main def main =
 
-  val Test = Person("Esteban", 1)
+  val person = Person("Esteban", 10.refineUnsafe[Positive])
+  val json = jsonCodec.encode(person)
 
-  println(s"Saved results in 5 formats")
+  println(s"JSON: ${new String(json, "UTF-8")}")

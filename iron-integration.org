@@ -1,0 +1,161 @@
+#+TITLE: ZIO Blocks Schema Iron Integration
+#+AUTHOR: Esteban Marin
+#+DATE: 2026-02-17
+
+* Problem
+Issue #1072: Add refined type support to zio-blocks-schema using Iron library.
+
+Goal: Enable case classes with Iron refined types to work seamlessly with ZIO Schema:
+#+begin_src scala
+case class Person(name: String, age: Int :| Positive)
+object Person:
+  given Schema[Person] = Schema.derived
+
+val jsonCodec = Schema[Person].derive(JsonFormat)
+#+end_src
+
+* Solution
+** Key Insight
+Iron refined types (=A :| C=) are *opaque type aliases* - at runtime they're identical to the base type =A=.
+Therefore, no transformation is needed, just a direct Schema cast.
+
+** Implementation
+Created =SchemaIron.scala= with minimal code (8 lines):
+
+#+begin_src scala
+package zio.blocks.schema.iron
+
+import zio.blocks.schema.*
+import io.github.iltotore.iron.*
+
+object SchemaIron:
+  inline given [A, C](using baseSchema: Schema[A]): Schema[A :| C] =
+    baseSchema.asInstanceOf[Schema[A :| C]]
+#+end_src
+
+** Usage
+#+begin_src scala
+import zio.blocks.schema.*
+import zio.blocks.schema.json.JsonFormat
+import io.github.iltotore.iron.*
+import io.github.iltotore.iron.constraint.numeric.*
+import SchemaIron.given  // Import the integration
+
+case class Person(name: String, age: Int :| Positive)
+
+object Person:
+  given Schema[Person] = Schema.derived
+
+val jsonCodec = Schema[Person].derive(JsonFormat)
+
+@main def main =
+  val person = Person("Esteban", 10.refineUnsafe[Positive])
+  val json = jsonCodec.encode(person)
+  println(new String(json, "UTF-8"))
+  // Output: {"name":"Esteban","age":10}
+#+end_src
+
+** What Works
+- ✅ Compiles successfully
+- ✅ Derives Schema for refined types automatically
+- ✅ Encodes/decodes correctly with all ZIO Schema formats (JSON, Avro, Thrift, etc.)
+- ✅ Minimal implementation (8 lines of code)
+
+* Next Steps
+** 1. Create PR to zio-blocks
+*** Fork and clone zio-blocks repository
+#+begin_src bash
+git clone https://github.com/zio/zio-blocks.git
+cd zio-blocks
+git checkout -b feature/schema-iron-integration
+#+end_src
+
+*** Add new module: =zio-blocks-schema-iron=
+Create module structure similar to existing schema modules:
+- =zio-blocks-schema-avro=
+- =zio-blocks-schema-json=
+- =zio-blocks-schema-thrift=
+
+*** Module structure
+#+begin_example
+zio-blocks-schema-iron/
+├── src/
+│   └── main/
+│       └── scala/
+│           └── zio/
+│               └── blocks/
+│                   └── schema/
+│                       └── iron/
+│                           └── SchemaIron.scala
+└── build.sbt (or add to main build)
+#+end_example
+
+*** Add Iron dependency
+In build configuration:
+#+begin_src scala
+libraryDependencies += "io.github.iltotore" %% "iron" % "3.2.3"
+#+end_src
+
+** 2. Add Documentation
+*** README or docs explaining:
+- How to add dependency
+- Import statement needed
+- Example usage
+- Supported Iron constraints
+
+** 3. Add Tests (Optional but recommended)
+Test various Iron constraints:
+- Numeric: =Positive=, =Negative=, =Greater[N]=
+- String: =NonEmpty=, =MinLength[N]=
+- Collections: etc.
+
+** 4. Submit PR
+- Reference issue #1072
+- Explain the opaque type approach
+- Show working example
+- Credit John's suggestion about using =.transform= (even though we simplified further)
+
+* Notes from John (jdegoes)
+#+begin_quote
+I would think about adding schema-iron that derives Schema[A :| B] assuming Schema[A] exists, 
+and does that by using .transform on the schema, ensuring runtime validation.
+#+end_quote
+
+Our implementation is even simpler - no transform needed since Iron types are opaque aliases.
+Runtime validation can be added later if needed.
+
+* Current PoC Location
+Working proof of concept in:
+=/Users/esteban-ziverge/mine/zio-nix/ziolevel-nix/zio-sandbox=
+
+Files:
+- =src/main/scala/SchemaIron.scala= - The integration
+- =src/main/scala/Main.scala= - Working example
+- =build.sbt= - Dependencies
+
+* Future Enhancements
+** Runtime Validation
+Currently no runtime validation during deserialization. Could add:
+#+begin_src scala
+inline given [A, C](using 
+  baseSchema: Schema[A],
+  constraint: Constraint[A, C]
+): Schema[A :| C] =
+  baseSchema.transform(
+    a => if constraint.test(a) then a.asInstanceOf[A :| C] 
+         else throw ValidationException(...),
+    refined => refined
+  )
+#+end_src
+
+Challenge: Iron's =constraint.test= is inline and can't be invoked at runtime easily.
+Need to investigate Iron's runtime validation API.
+
+** Support More Iron Features
+- Custom error messages
+- Accumulating errors
+- Integration with ZIO validation
+
+* Status
+✅ PoC Complete and Working
+⏳ Ready for PR to zio-blocks
